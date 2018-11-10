@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 import unittest
-from lsw import LsOutputAdapter
+from lsa import LsOutputAdapter
 
 class LsOutputAdapterTest(unittest.TestCase):
     valid_messages = [

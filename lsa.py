@@ -13,7 +13,7 @@ import argparse
 SELECT_INTERVAL = 1
 
 logging.basicConfig()
-logger = logging.getLogger("lsw")
+logger = logging.getLogger("lsa")
 
 class LsOutputAdapter:
     def __init__(self, original_encoding='utf-8'):
@@ -132,22 +132,21 @@ def read_greedly(fd):
 def handle_stdin(stdin, lsproc_stdin):
     input = read_greedly(stdin)
     if input:
-        logger.debug("read input from stdin: %s", input)
-        # TODO handle exit
+        logger.debug("read from stdin: %s", input)
         lsproc_stdin.write(input)
         lsproc_stdin.flush()
 
 def handle_lsproc_stderr(lsproc_stderr, sys_stderr):
     input = read_greedly(lsproc_stderr)
     if input:
-        logger.debug("read input from lsproc stderr: %s", input)
+        logger.debug("read from lsproc stderr: %s", input)
         sys_stderr.write(input)
         sys_stderr.flush()
 
 def handle_lsproc_stdout(lsproc_stdout, adapter, sys_stdout):
     input = read_greedly(lsproc_stdout)
     if input:
-        logger.debug("read input from lsproc stdout: %s", input)
+        logger.debug("read from lsproc stdout: %s", input)
         output = adapter.process_input(input)
         sys_stdout.write(output)
         sys_stdout.flush()
