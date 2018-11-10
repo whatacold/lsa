@@ -8,12 +8,12 @@ import fcntl
 import os
 import logging
 import platform
+import argparse
 
 SELECT_INTERVAL = 1
 
 logging.basicConfig()
 logger = logging.getLogger("lsw")
-logger.setLevel(logging.DEBUG)
 
 class LsOutputAdapter:
     def __init__(self, original_encoding='utf-8'):
@@ -36,6 +36,7 @@ class LsOutputAdapter:
     def process_input(self, input):
         if not input:
             return
+        logger.debug("state: {}, buffer: {}, input: {}".format(self.state, self.input_buffer, input))
         self.input_buffer = self.input_buffer + input
         self.process_input_buffer()
         return self.get_and_clear_output()
@@ -143,11 +144,12 @@ def handle_lsproc_stderr(lsproc_stderr, sys_stderr):
         sys_stderr.write(input)
         sys_stderr.flush()
 
-def handle_lsproc_stdout(lsproc_stdout, sys_stdout):
+def handle_lsproc_stdout(lsproc_stdout, adapter, sys_stdout):
     input = read_greedly(lsproc_stdout)
     if input:
         logger.debug("read input from lsproc stdout: %s", input)
-        sys_stdout.write(input)
+        output = adapter.process_input(input)
+        sys_stdout.write(output)
         sys_stdout.flush()
 
 def set_fd_nonblock(fd):
@@ -155,7 +157,34 @@ def set_fd_nonblock(fd):
     fcntl.fcntl(fd, fcntl.F_SETFL, flags | os.O_NONBLOCK)
 
 def main():
-    lsproc = subprocess.Popen(sys.argv[1:],
+    arg_parser = argparse.ArgumentParser(description='A Language Server Adapter',
+                                         epilog='''
+                                         Examples:
+                                         1. --original_output_encoding -- clangd --foo --bar
+                                         2. clangd
+                                         ''')
+    arg_parser.add_argument("--original-output-encoding",
+                            default="utf-8",
+                            help="The original output encoding the adapted LS used")
+    arg_parser.add_argument("--log-level",
+                            choices=['DEBUG', 'INFO'],
+                            default="DEBUG",
+                            help="The log level")
+    arg_parser.add_argument("server",
+                            help="The adapted language server")
+    arg_parser.add_argument("option",
+                            nargs="*",
+                            help="The options for the adapted language server")
+    args = arg_parser.parse_args()
+
+    log_levels_map = {
+        "DEBUG": logging.DEBUG,
+        "INFO": logging.INFO,
+    }
+    logger.setLevel(log_levels_map[args.log_level])
+
+    lsproc_args = [args.server] + args.option
+    lsproc = subprocess.Popen(lsproc_args,
                               stdin=subprocess.PIPE,
                               stdout=subprocess.PIPE,
                               stderr=subprocess.PIPE)
@@ -172,6 +201,8 @@ def main():
     set_fd_nonblock(lsproc_stderr)
     set_fd_nonblock(sys_stdin)
 
+    adapter = LsOutputAdapter(args.original_output_encoding)
+
     while True:
         rc = lsproc.poll()
         if rc is not None:
@@ -181,7 +212,7 @@ def main():
         readable, _, _ = select.select([sys_stdin, lsproc_stdout, lsproc_stderr],
                                             [], [], SELECT_INTERVAL)
         if lsproc_stdout in readable:
-            handle_lsproc_stdout(lsproc_stdout, sys_stdout)
+            handle_lsproc_stdout(lsproc_stdout, adapter, sys_stdout)
         if lsproc_stderr in readable:
             handle_lsproc_stderr(lsproc_stderr, sys_stderr)
         if sys_stdin in readable:
@@ -190,6 +221,7 @@ def main():
     # lsproc.terminate()
 
 if __name__ == "__main__":
+    logger.setLevel(logging.DEBUG)
     logger.info("py version: %s, cwd: %s",
                 platform.python_version(),
                 os.getcwd())
