@@ -1,8 +1,6 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# only python 2.7 is supported right now, due to python 3's stdin/stdout/stderr not in binary mode
-
 import subprocess
 import select
 import sys
@@ -16,6 +14,95 @@ SELECT_INTERVAL = 1
 logging.basicConfig()
 logger = logging.getLogger("lsw")
 logger.setLevel(logging.DEBUG)
+
+class LsOutputAdapter:
+    def __init__(self):
+        self.state = 0 # 1: reading header, 2: reading body, 0: neither
+        self.expected_len = 0 # larger than header keyword
+        self.input_buffer = b''
+        self.lsp_headers = b''
+        self.lsp_body_length = 0
+        self.lsp_body = b''
+
+        self.output_buffer = b''
+
+        self.CONTENT_LENGTH_KEY = b'Content-Length: '
+        self.MIN_LEN = len(self.CONTENT_LENGTH_KEY)
+        self.HEADER_SEPERATOR = b'\r\n'
+        self.HEADERS_BODY_SEPERATOR = b'\r\n\r\n'
+
+    def process_input(self, input):
+        if not input:
+            return
+        self.input_buffer = self.input_buffer + input
+        self.process_input_buffer()
+        return self.get_and_clear_output()
+
+    def process_input_buffer(self):
+        # if not self.input_buffer:
+        #     return              # avoid infinite loop
+
+        if 0 == self.state:
+            if len(self.input_buffer) > self.MIN_LEN:
+                self.state = 1
+                self.process_input_buffer()
+        elif 1 == self.state:
+            cl_start = self.input_buffer.find(self.CONTENT_LENGTH_KEY)
+            if -1 == cl_start:  # not found
+                # XXX Part of `Content-Length: ` may be at the end
+                keep_len = len(self.CONTENT_LENGTH_KEY) - 1
+                flush_end = len(self.input_buffer) - keep_len
+                self.output_buffer = self.output_buffer + self.input_buffer[:flush_end]
+                self.input_buffer = self.input_buffer[flush_end:]
+                self.state = 0
+                return
+            else:
+                if cl_start > 0:
+                    self.output_buffer = self.output_buffer + self.input_buffer[:cl_start]
+                    self.input_buffer = self.input_buffer[cl_start:]
+                    cl_start = 0
+                ct_end = self.input_buffer.find(self.HEADER_SEPERATOR, cl_start)
+                if ct_end == -1:  # incomplete header, keep reading
+                    self.state = 1
+                    return
+                self.lsp_body_length = int(self.input_buffer[cl_start + len(self.CONTENT_LENGTH_KEY):ct_end])
+
+                headers_end_pos = self.input_buffer.find(self.HEADERS_BODY_SEPERATOR)
+                if -1 == headers_end_pos: # keep reading header
+                    self.state = 1
+                    return
+                self.lsp_headers = self.input_buffer[(ct_end + len(self.HEADER_SEPERATOR)):(headers_end_pos + len(self.HEADER_SEPERATOR))]
+                body_start = headers_end_pos + len(self.HEADERS_BODY_SEPERATOR)
+                self.input_buffer = self.input_buffer[body_start:]
+                self.state = 2
+                self.process_input_buffer()
+        elif 2 == self.state:
+            if len(self.input_buffer) < self.lsp_body_length: # keep reading body
+                return
+
+            self.lsp_body = self.input_buffer[:self.lsp_body_length]
+            self.input_buffer = self.input_buffer[self.lsp_body_length:]
+            self.convert_lsp_message()
+            self.lsp_body_length = 0
+            self.lsp_headers = b''
+            self.lsp_body = b''
+
+            self.state = 0
+            self.process_input_buffer()
+            return
+
+    def convert_lsp_message(self):
+        content_length = "Content-Length: {}\r\n".format(self.lsp_body_length) \
+                                                 .encode(encoding='utf8')
+        self.output_buffer = self.output_buffer + content_length + self.lsp_headers + \
+            self.HEADER_SEPERATOR + self.lsp_body
+        self.lsp_headers = b''
+        self.lsp_body = b''
+
+    def get_and_clear_output(self):
+        output = self.output_buffer
+        self.output_buffer = b''
+        return output
 
 def read_greedly(fd):
     input = b""
