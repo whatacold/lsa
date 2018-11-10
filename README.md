@@ -1,1 +1,1 @@
-Language Server Wrapper
+Language Server Adapter

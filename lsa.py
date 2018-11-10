@@ -20,13 +20,12 @@ class LsOutputAdapter:
         self.original_encoding = original_encoding
 
         self.state = 0 # 1: reading header, 2: reading body, 0: neither
-        self.expected_len = 0 # larger than header keyword
         self.input_buffer = b''
+        self.output_buffer = b''
+
         self.lsp_headers = b''
         self.lsp_body_length = 0
         self.lsp_body = b''
-
-        self.output_buffer = b''
 
         self.CONTENT_LENGTH_KEY = b'Content-Length: '
         self.MIN_LEN = len(self.CONTENT_LENGTH_KEY)
