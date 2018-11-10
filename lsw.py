@@ -16,7 +16,9 @@ logger = logging.getLogger("lsw")
 logger.setLevel(logging.DEBUG)
 
 class LsOutputAdapter:
-    def __init__(self):
+    def __init__(self, original_encoding='utf-8'):
+        self.original_encoding = original_encoding
+
         self.state = 0 # 1: reading header, 2: reading body, 0: neither
         self.expected_len = 0 # larger than header keyword
         self.input_buffer = b''
@@ -92,10 +94,18 @@ class LsOutputAdapter:
             return
 
     def convert_lsp_message(self):
+        try:
+            unicode_str = self.lsp_body.decode(self.original_encoding, 'strict')
+            if len(unicode_str) < self.lsp_body_length:  # there is non-ascii chars
+                self.lsp_body = unicode_str.encode('utf-8')
+                self.lsp_body_length = len(self.lsp_body)
+        except UnicodeDecodeError:
+            pass  # no conversion, keep it as is
         content_length = "Content-Length: {}\r\n".format(self.lsp_body_length) \
                                                  .encode(encoding='utf8')
         self.output_buffer = self.output_buffer + content_length + self.lsp_headers + \
             self.HEADER_SEPERATOR + self.lsp_body
+
         self.lsp_headers = b''
         self.lsp_body = b''
 
