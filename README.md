@@ -13,6 +13,9 @@ from GBK to UTF-8 encoding.
 
    For me, I start the server with `eglot` in Emacs like this:
 
+        (defcustom eglot-ls-output-encoding "utf-8"
+          "The LS's output encoding")
+
         (defun whatacold/eglot-ccls-contact (interactive-p)
           "A contact function to assemble args for ccls.
         Argument INTERACTIVE-P indicates where it's called interactively."
@@ -41,3 +44,7 @@ from GBK to UTF-8 encoding.
                                            "--")))
                 (push item result)))
             result))
+
+# Notes
+
+- Only Python 3 is currently supported
