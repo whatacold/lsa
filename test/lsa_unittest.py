@@ -2,6 +2,9 @@
 # -*- coding: utf-8 -*-
 
 import unittest
+import sys
+
+sys.path.append("..")
 from lsa import LsResponseAdapter
 
 class LsResponseAdapterTest(unittest.TestCase):
