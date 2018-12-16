@@ -10,4 +10,4 @@ EOF
 $PY lsa.py echo "hello world"
 
 $PY lsa.py $PY test/ls.py utf-8
-$PY lsa.py --original-output-encoding gbk -- $PY test/ls.py gbk
+$PY lsa.py --original-response-encoding gbk -- $PY test/ls.py gbk

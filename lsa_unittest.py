@@ -2,10 +2,10 @@
 # -*- coding: utf-8 -*-
 
 import unittest
-from lsa import LsOutputAdapter
+from lsa import LsResponseAdapter
 
-class LsOutputAdapterTest(unittest.TestCase):
-    valid_messages = [
+class LsResponseAdapterTest(unittest.TestCase):
+    valid_lsp_responses = [
         b"Content-Length: 5\r\n\r\nhello",
         b"Content-Length: 5\r\nxxxxxxx\r\n\r\nhello",
         b"Content-Length: 5\r\n\r\nhelloContent-Length: 5\r\nxxxxxxx\r\n\r\nhello",
@@ -13,46 +13,51 @@ class LsOutputAdapterTest(unittest.TestCase):
         b"foobarContent-Length: 5\r\n\r\nhello-----non lsp content-----Content-Length: 5\r\nxxxxxxx\r\n\r\nhello",
     ]
 
-    def test_complete_messages(self):
-        adapter = LsOutputAdapter()
-        for input in self.valid_messages:
-            output = adapter.process_input(input)
-            self.assertEqual(input, output)
+    def test_complete_responses(self):
+        """Test case for complete LSP response."""
+        adapter = LsResponseAdapter()
+        for response in self.valid_lsp_responses:
+            output = adapter.adapt_response(response)
+            self.assertEqual(response, output)
 
-    def test_slow_output(self):
-        adapter = LsOutputAdapter()
-        for input in self.valid_messages:
+    def test_slow_response(self):
+        """Test case for adapting slow response of LS."""
+        adapter = LsResponseAdapter()
+        for response in self.valid_lsp_responses:
             for every_len in [3, 6, 12, 20]:
                 i = 0
                 output = b''
-                while i < len(input):
-                    this_input = input[i:(i + every_len)]
-                    output = output + adapter.process_input(this_input)
+                while i < len(response):
+                    this_input = response[i:(i + every_len)]
+                    output = output + adapter.adapt_response(this_input)
                     i = i + every_len
-                self.assertEqual(input, output)
+                self.assertEqual(response, output)
 
-    def test_output_as_utf8(self):
-        "UTF-8 output is expected, no matter what encoding the original output uses."
+    def test_encoding(self):
+        """
+        Test case for adapting LSP response encoding.
+
+        UTF-8 output is expected after adapting, no matter
+        what encoding the original output uses.
+        """
         messages = [
-            "hello world means 你好",
+            "hello world means 你好世界。",
             "这是一句长长长长长长长长长长长长长长长长长长的句子。",
         ]
 
         for encoding in ['utf-8', 'gbk']:
-            adapter = LsOutputAdapter(encoding)
-            for input in messages:
-                print("test input in:", encoding)
-
-                input_utf8_bytes = input.encode('utf-8')
-                expected_output = "Content-Length: {}\r\n\r\n".format(len(input_utf8_bytes)) \
+            adapter = LsResponseAdapter(encoding)
+            for message in messages:
+                msg_utf8_bytes = message.encode('utf-8')
+                expected_output = "Content-Length: {}\r\n\r\n".format(len(msg_utf8_bytes)) \
                                                               .encode() + \
-                                                              input_utf8_bytes
+                                                              msg_utf8_bytes
 
-                input_bytes = input.encode(encoding)
+                input_bytes = message.encode(encoding)
                 input_bytes = "Content-Length: {}\r\n\r\n".format(len(input_bytes)) \
                                                           .encode() + \
                                                           input_bytes
-                output = adapter.process_input(input_bytes)
+                output = adapter.adapt_response(input_bytes)
                 self.assertEqual(expected_output, output)
 
 if __name__ == "__main__":
